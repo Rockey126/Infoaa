@@ -1,117 +1,113 @@
 import telebot
 import requests
-import time
 
 # --- CONFIGURATION ---
 BOT_TOKEN = '8582095841:AAEH5g7x-MM6oQBAcHGIXMntWYG2UxurR3Y'
-ADMIN_ID = 5768665344
-CHANNEL_ID = -1003896003068
-CHANNEL_USER = '@osintbyrockey'
-UPI_ID = "paytm.s20gdag@pty"
+CHANNEL_ID = -1003896003068  
+CHANNEL_USER = '@osintbyrockey' 
+ADMIN_ID = 5768665344        
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # Temporary Database
 user_credits = {}
 referred_users = [] 
-used_txns = [] 
 
 def is_user_joined(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_ID, user_id)
         return member.status in ['member', 'administrator', 'creator']
-    except: return False
-
-# --- KEYBOARDS ---
-def main_keyboard(uid):
-    markup = telebot.types.InlineKeyboardMarkup()
-    pay_url = f"upi://pay?pa={UPI_ID}&pn=RockeyBot&am=10&cu=INR"
-    btn_pay = telebot.types.InlineKeyboardButton("💰 Add Funds (UPI)", url=pay_url)
-    markup.add(btn_pay)
-    return markup
+    except:
+        return False
 
 @bot.message_handler(commands=['start'])
 def start(message):
     uid = message.from_user.id
     args = message.text.split()
     
-    # New User Setup (1 Credit Only)
+    # Naye user ko sirf 1 credit dena
     if uid not in user_credits:
         user_credits[uid] = 1 
+        
+        # Referral logic
         if len(args) > 1 and args[1].isdigit():
             referrer_id = int(args[1])
             if referrer_id != uid and uid not in referred_users:
                 user_credits[referrer_id] = user_credits.get(referrer_id, 0) + 1
                 referred_users.append(uid)
-                try: bot.send_message(referrer_id, "🎁 Referral Credit added!")
+                try:
+                    bot.send_message(referrer_id, f"🎁 Aapko **1 Referral Credit** mila!")
                 except: pass
 
     ref_link = f"https://t.me/{(bot.get_me()).username}?start={uid}"
+    
+    # Updated message to guide the user
     msg = (
-        f"👋 **Rockey Info Bot**\n\n"
-        f"💰 Balance: `{user_credits[uid]}`\n"
+        f"👋 **Welcome to Rockey Info Bot!**\n\n"
+        f"💰 Your Credits: `{user_credits[uid]}`\n"
+        f"📢 Must Join: {CHANNEL_USER}\n"
         f"➖ Per Search: **2 Credits**\n\n"
-        f"📝 Number bhejein details ke liye.\n"
-        f"🔗 **Refer Link:** `{ref_link}`"
+        f"📝 **How to use:**\n"
+        f"Details nikalne ke liye niche **10-digit phone number** bhejein.\n\n"
+        f"🔗 **Referral Link:** (Earn 1 Credit per invite)\n`{ref_link}`"
     )
-    bot.reply_to(message, msg, parse_mode="Markdown", reply_markup=main_keyboard(uid))
+    bot.reply_to(message, msg, parse_mode="Markdown")
 
-# --- COMBINED ADMIN MANUAL CREDIT COMMAND ---
 @bot.message_handler(commands=['add'])
-def add_credits_manual(message):
+def add_credits(message):
     if message.from_user.id == ADMIN_ID:
         try:
-            # Format: /add [User_ID] [Amount]
             args = message.text.split()
             target_id, amount = int(args[1]), int(args[2])
             user_credits[target_id] = user_credits.get(target_id, 0) + amount
-            bot.reply_to(message, f"✅ Admin: Added {amount} credits to {target_id}.")
-            bot.send_message(target_id, f"🎉 Admin ne aapke account mein **{amount} credits** add kiye hain!")
+            bot.reply_to(message, f"✅ User {target_id} ko {amount} credits de diye.")
         except:
-            bot.reply_to(message, "❌ Use: `/add UserID Amount`", parse_mode="Markdown")
+            bot.reply_to(message, "❌ Format: `/add ID Amount`", parse_mode="Markdown")
 
-# --- TRANSACTION ID APPROVAL SYSTEM ---
-@bot.message_handler(func=lambda message: len(message.text) > 8 and not message.text.isdigit())
-def verify_payment_id(message):
-    txn_id = message.text.strip()
-    uid = message.from_user.id
-    if txn_id in used_txns:
-        bot.reply_to(message, "❌ TXN ID used already.")
-        return
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton("✅ Approve", callback_data=f"app_{uid}_{txn_id}"))
-    bot.send_message(ADMIN_ID, f"🔔 **New Payment!**\nUser: `{uid}`\nTXN: `{txn_id}`", reply_markup=markup)
-    bot.reply_to(message, "⏳ Admin verification ke liye bhej diya gaya hai.")
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("app_"))
-def admin_approve(call):
-    data = call.data.split("_")
-    target_id, txn_id = int(data[1]), data[2]
-    user_credits[target_id] = user_credits.get(target_id, 0) + 10 
-    used_txns.append(txn_id)
-    bot.send_message(target_id, "🎉 Payment Approved! 10 Credits added.")
-    bot.edit_message_text(f"✅ Approved {target_id}", call.message.chat.id, call.message.message_id)
-
-# --- SEARCH LOGIC ---
-@bot.message_handler(func=lambda message: message.text.isdigit() and len(message.text) >= 10)
+@bot.message_handler(func=lambda message: True)
 def handle_search(message):
     uid = message.from_user.id
     num = message.text.strip()
+
     if not is_user_joined(uid):
-        bot.reply_to(message, f"⚠️ Join {CHANNEL_USER}")
+        bot.reply_to(message, f"⚠️ Access Denied! Pehle join karein: {CHANNEL_USER}")
         return
-    if user_credits.get(uid, 0) < 2:
-        bot.reply_to(message, "❌ Credits Low!", reply_markup=main_keyboard(uid))
-        return
-    bot.send_message(message.chat.id, "🔍 Searching...")
-    api_url = f"https://username-brzb.vercel.app/get-info?phone={num}"
-    try:
-        response = requests.get(api_url, timeout=15).json()
-        if response.get("status") == True:
-            user_credits[uid] -= 2
-            res = response["results"][0]
-            bot.reply_to(message, f"👤 Name: `{res.get('name')}`\n📍 Address: `{res.get('address')}`\n💰 Balance: {user_credits[uid]}", parse_mode="Markdown")
-        else: bot.reply_to(message, "❌ No data.")
-    except: bot.reply_to(message, "⚠️ Error!")
+
+    if num.isdigit() and len(num) >= 10:
+        # Check credit (2 required)
+        if user_credits.get(uid, 0) < 2:
+            bot.reply_to(message, "❌ Low Balance! Search ke liye **2 Credits** chahiye. Invite karein ya admin se buy karein.")
+            return
+
+        bot.send_message(message.chat.id, "🔍 **Searching Database...**")
+        api_url = f"https://username-brzb.vercel.app/get-info?phone={num}"
+        
+        try:
+            response = requests.get(api_url, timeout=15)
+            data = response.json()
+            
+            if data.get("status") == True and data.get("results"):
+                user_credits[uid] -= 2 
+                res = data["results"][0]
+                
+                details = (
+                    f"✅ **Details Found**\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"👤 **Name:** `{res.get('name', 'N/A')}`\n"
+                    f"👨‍👦 **Father:** `{res.get('father_name', 'N/A')}`\n"
+                    f"📱 **Primary:** `{res.get('mobile', 'N/A')}`\n"
+                    f"📲 **Alt Mobile:** `{res.get('alt_mobile', 'N/A')}`\n"
+                    f"📍 **Address:** `{res.get('address', 'N/A')}`\n"
+                    f"🌐 **Circle:** `{res.get('circle', 'N/A')}`\n"
+                    f"━━━━━━━━━━━━━━━━━━\n"
+                    f"💰 **Remaining Balance:** {user_credits[uid]} credits"
+                )
+                bot.reply_to(message, details, parse_mode="Markdown")
+            else:
+                bot.reply_to(message, "❌ No record found.")
+        except:
+            bot.reply_to(message, "⚠️ API Error! Please try again later.")
+    else:
+        bot.reply_to(message, "🚫 Kripya sahi 10-digit number bhejein.")
 
 bot.infinity_polling()
