@@ -1,48 +1,48 @@
+import os
 import telebot
 import requests
 
-# Replace with your actual Bot Token from BotFather
-BOT_TOKEN = '8578324022:AAE26QzOw1Z6ITLcyR8buf_JgqflBU0WCok'
+# Render Environment Variables se token lein
+BOT_TOKEN ='8578324022:AAE26QzOw1Z6ITLcyR8buf_JgqflBU0WCok' os.environ.get('BOT_TOKEN')
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Command: /start or sending 'start'
 @bot.message_handler(commands=['start'])
-@bot.message_handler(func=lambda message: message.text.lower() == 'start')
-def send_welcome(message):
-    bot.reply_to(message, "👋 Welcome! Please send me a 10-digit phone number to get the details.")
+def start(message):
+    bot.reply_to(message, "👋 Welcome! Phone number bhejein details ke liye.")
 
-# Handling phone number inputs
 @bot.message_handler(func=lambda message: True)
 def get_info(message):
-    user_input = message.text.strip()
+    number = message.text.strip()
     
-    # Basic check if input is a number
-    if user_input.isdigit() and len(user_input) >= 10:
-        bot.send_message(message.chat.id, "🔍 Fetching details... Please wait.")
+    if number.isdigit() and len(number) >= 10:
+        bot.send_message(message.chat.id, "🔍 Searching in Database...")
         
-        # API URL
-        api_url = f"https://username-brzb.vercel.app/get-info?phone={user_input}"
+        # Sahi API URL string formatting ke saath
+        api_url = f"https://username-brzb.vercel.app/get-info?phone={number}"
         
         try:
-            response = requests.get(api_url)
+            response = requests.get(api_url, timeout=10)
+            data = response.json()
             
-            if response.status_code == 200:
-                data = response.json()
+            # Aapki API ke "results" list se data nikalna
+            if data.get("status") == True and data.get("results"):
+                res = data["results"][0] # Pehla result uthaya
                 
-                # Format the response (modify keys based on your actual API output)
-                # Assuming API returns keys like 'name', 'location', etc.
-                details = f"✅ **Details Found:**\n\n"
-                for key, value in data.items():
-                    details += f"🔹 {key.capitalize()}: {value}\n"
-                
+                details = (
+                    f"✅ Details Found\n\n"
+                    f"👤 Name: {res.get('name', 'N/A')}\n"
+                    f"👨‍👦 Father: {res.get('father_name', 'N/A')}\n"
+                    f"📍 Address: {res.get('address', 'N/A')}\n"
+                    f"📱 Mobile: {res.get('mobile', 'N/A')}\n"
+                    f"🌐 Circle: {res.get('circle', 'N/A')}"
+                )
                 bot.reply_to(message, details, parse_mode="Markdown")
             else:
-                bot.reply_to(message, "❌ Error: Could not find details for this number.")
+                bot.reply_to(message, "❌ No records found for this number.")
                 
         except Exception as e:
-            bot.reply_to(message, "⚠️ API is currently down or there's a connection issue.")
+            bot.reply_to(message, "⚠️ Server Error: API response read nahi kar paa raha.")
     else:
-        bot.reply_to(message, "🚫 Please enter a valid 10-digit phone number.")
+        bot.reply_to(message, "🚫 Invalid number! Please enter 10 digits.")
 
-print("Bot is running...")
 bot.infinity_polling()
